@@ -1,0 +1,379 @@
+<title>マネージャー報酬シミュレーター</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: single-column scroll — sticky input rail, then 3 stacked result sections (内訳 / パターン / レベル別イメージ) */
+  :root {
+    --navy: #1F3864;
+    --fill-strong: #1F3864;
+    --blue: #157FC2;
+    --lblue: #E6F2FD;
+    --accent: #EC1672;
+    --bg: #F9FAFF;
+    --surface: #FFFFFF;
+    --border: #E1E5F5;
+    --text: #1B1830;
+    --text-dim: #5C5878;
+    /* category colors: ① ランクアップ＝紫 / ② アクティブ＝緑 / ③ レベニュー＝琥珀 */
+    --c-rank: #8B5CF6; --c-rank-bg: #F2ECFE;
+    --c-active: #0DA66E; --c-active-bg: #E1FBF0;
+    --c-revenue: #F59E0B; --c-revenue-bg: #FEF2DC;
+    /* pattern colors: マネジメントのみ＝青 / スカウト+マネジメント＝紫 / スカウトのみ＝緑 */
+    --c-p1: #2F6FEF; --c-p1-bg: #E7F0FF;
+    --c-p2: #A345F0; --c-p2-bg: #F4E8FF;
+    --c-p3: #0DA66E; --c-p3-bg: #E1FBF0;
+    --font-display: 'Zen Kaku Gothic New', 'Noto Sans JP', sans-serif;
+    --font-body: 'Noto Sans JP', 'Hiragino Sans', sans-serif;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--font-body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    font-variant-numeric: tabular-nums;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding-block: 28px 60px; }
+
+  .topband {
+    height: 6px; border-radius: 6px;
+    background: linear-gradient(90deg, var(--c-rank), var(--c-active), var(--c-revenue), var(--accent));
+    margin-bottom: 22px;
+  }
+
+  header.page-head { margin-bottom: 20px; }
+  .eyebrow { font-size: 11.5px; color: var(--text-dim); letter-spacing: .06em; margin-bottom: 6px; font-weight: 700; }
+  h1 {
+    font-family: var(--font-display); font-size: clamp(22px, 4vw, 28px); margin: 0 0 6px; text-wrap: balance;
+    background: linear-gradient(90deg, var(--navy), var(--c-rank) 70%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede { font-size: 13px; color: var(--text-dim); line-height: 1.6; max-width: 65ch; }
+  .lede a { color: var(--blue); }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 18px;
+    box-shadow: 0 1px 3px rgba(60, 40, 110, 0.05);
+  }
+  .panel h2 {
+    display: flex; align-items: center; gap: 9px;
+    font-family: var(--font-display); font-size: 16px; color: var(--navy); margin: 0 0 4px;
+  }
+  .panel h2 .n {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 23px; height: 23px; min-width: 23px; border-radius: 50%; background: var(--fill-strong); color: #fff;
+    font-size: 12px; font-weight: 700;
+  }
+  .panel h2 .n.p1 { background: var(--c-p1); }
+  .panel h2 .n.p2 { background: var(--c-p2); }
+  .panel h2 .n.p3 { background: var(--c-revenue); }
+  .panel .hint { font-size: 12px; color: var(--text-dim); margin: 0 0 14px; line-height: 1.55; }
+
+  /* --- input rail --- */
+  .input-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 640px) { .input-grid { grid-template-columns: 1fr; } }
+  .field label { display: block; font-size: 11.5px; color: var(--text-dim); margin-bottom: 6px; font-weight: 600; }
+  .field input[type="number"], .field select {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit;
+  }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .preset-btn {
+    border: 1px solid var(--border); background: var(--bg); color: var(--text-dim);
+    border-radius: 6px; padding: 4px 9px; font-size: 11.5px; cursor: pointer; font-family: inherit;
+  }
+  .preset-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .preset-btn.active { background: var(--fill-strong); border-color: var(--fill-strong); color: #fff; }
+  .radio-row { display: flex; gap: 8px; }
+  .radio-chip {
+    flex: 1; text-align: center; border: 1px solid var(--border); border-radius: 7px; padding: 8px 6px;
+    font-size: 12.5px; cursor: pointer; color: var(--text-dim);
+  }
+  .radio-chip input { display: none; }
+  .radio-chip.checked { background: var(--lblue); border-color: var(--blue); color: var(--navy); font-weight: 700; }
+
+  /* --- table --- */
+  .tbl-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 520px; }
+  th {
+    background: var(--fill-strong); color: #fff; padding: 9px 8px; text-align: center; font-size: 11.5px;
+    font-weight: 700; line-height: 1.3;
+  }
+  #breakdownBody th, #levelBody th {}
+  td { padding: 10px 8px; text-align: center; border-bottom: 1px solid var(--border); }
+  td.lbl { text-align: left; font-weight: 600; position: relative; padding-left: 20px; }
+  td.lbl::before {
+    content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 9px; height: 9px; border-radius: 50%; background: var(--dot, var(--border));
+  }
+  tr.row-rank td { background: var(--c-rank-bg); }
+  tr.row-active td { background: var(--c-active-bg); }
+  tr.row-revenue td { background: var(--c-revenue-bg); }
+  tr.row-rank td.lbl { --dot: var(--c-rank); }
+  tr.row-active td.lbl { --dot: var(--c-active); }
+  tr.row-revenue td.lbl { --dot: var(--c-revenue); }
+  tr.row-rank td.yen { color: var(--c-rank); }
+  tr.row-active td.yen { color: var(--c-active); }
+  tr.row-revenue td.yen { color: var(--c-revenue); }
+  td.yen { color: var(--navy); font-weight: 700; }
+  tr.total td { background: linear-gradient(90deg, var(--c-rank-bg), var(--c-revenue-bg)); font-weight: 700; }
+  tr.total td.lbl::before { display: none; }
+  tr.total td.yen { color: var(--accent); }
+  tr.current td { background: var(--lblue); }
+  tr.current td.lbl::after { content: " ← 現在値"; font-size: 10.5px; color: var(--blue); font-weight: 400; }
+
+  /* --- pattern cards --- */
+  .pattern-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 640px) { .pattern-grid { grid-template-columns: 1fr; } }
+  .pcard {
+    border: 1px solid var(--border); border-radius: 10px; padding: 14px 12px 16px; text-align: center;
+    background: var(--bg); border-top: 4px solid var(--card-c, var(--border));
+  }
+  .pcard.p1 { --card-c: var(--c-p1); background: var(--c-p1-bg); border-color: var(--c-p1); }
+  .pcard.p2 { --card-c: var(--c-p2); background: var(--c-p2-bg); border-color: var(--c-p2); }
+  .pcard.p3 { --card-c: var(--c-p3); background: var(--c-p3-bg); border-color: var(--c-p3); }
+  .pcard .tag {
+    display: inline-block; font-size: 10.5px; font-weight: 700; color: #fff; background: var(--card-c, var(--blue));
+    border-radius: 4px; padding: 2px 9px; margin-bottom: 9px;
+  }
+  .pcard .desc { font-size: 13px; line-height: 1.4; margin-bottom: 8px; }
+  .pcard .rate { font-family: var(--font-display); font-size: 24px; font-weight: 700; color: var(--card-c, var(--navy)); }
+
+  .formula-note {
+    font-size: 11.5px; color: var(--text-dim); margin-top: 12px; line-height: 1.6;
+    border-left: 3px solid var(--border); padding-left: 10px;
+  }
+  .source-note { font-size: 11px; color: var(--text-dim); margin-top: 26px; line-height: 1.7; }
+  .source-note a { color: var(--blue); }
+</style>
+
+<div class="wrap">
+  <div class="topband"></div>
+  <header class="page-head">
+    <div class="eyebrow">lea公式報酬ガイド</div>
+    <h1>マネージャー報酬シミュレーター</h1>
+    <p class="lede">lea公式「事務所収益表」（<a href="https://humediajapan1234-ux.github.io/bonus-guide./" target="_blank" rel="noopener">bonus-guide</a>）の実測係数（0.9536）に基づき、ランクアップ・アクティブ・レベニューの3要素から事務所収益とマネジメント／スカウト報酬を計算します。</p>
+  </header>
+
+  <section class="panel">
+    <h2><span class="n">▸</span>計算条件</h2>
+    <p class="hint">対象ライバーの当月ダイヤ数・ランク状況・アクティブレベル・レベニュー成長率を設定してください。以下すべてのセクションがこの条件で連動します。</p>
+    <div class="input-grid">
+      <div class="field">
+        <label for="diamonds">当月ダイヤ数</label>
+        <input type="number" id="diamonds" value="1000000" step="10000" min="0">
+        <div class="presets" id="presetRow"></div>
+      </div>
+      <div class="field">
+        <label>ランク状況（前月＝当月基準）</label>
+        <div class="radio-row" id="rankOutcomeRow">
+          <label class="radio-chip checked"><input type="radio" name="rankOutcome" value="maintain" checked>維持</label>
+          <label class="radio-chip"><input type="radio" name="rankOutcome" value="up">アップ</label>
+        </div>
+        <div class="formula-note" id="rankInfo" style="margin-top:8px;"></div>
+      </div>
+      <div class="field">
+        <label for="revenueLv">レベニュー成長率（事務所全体・仮定）</label>
+        <select id="revenueLv"></select>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="n">1</span>ランクアップ → アクティブ → レベニューの内訳</h2>
+    <p class="hint">事務所収益＝ダイヤ数×料率(%)×0.9536。3要素を合算した事務所報酬に対し、マネジメント報酬30%・スカウト報酬20%をそれぞれ計算します。</p>
+    <div class="field" style="max-width:220px; margin-bottom:14px;">
+      <label for="activeLvA">アクティブレベル（①の内訳用）</label>
+      <select id="activeLvA"></select>
+    </div>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th style="text-align:left;">区分</th><th>料率</th><th>事務所収益</th><th>マネジメント30%</th><th>スカウト20%</th></tr></thead>
+        <tbody id="breakdownBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="n p1">2</span>担当パターン例</h2>
+    <div class="pattern-grid">
+      <div class="pcard p1"><span class="tag">ライバーマネジメント担当</span><div class="desc">事務所報酬に対する料率</div><div class="rate">30%</div></div>
+      <div class="pcard p2"><span class="tag">スカウト＋マネジメント担当</span><div class="desc">30%＋20%で</div><div class="rate">50%</div></div>
+      <div class="pcard p3"><span class="tag">スカウトのみ（マネジメントが事務所）</span><div class="desc">事務所報酬に対する料率</div><div class="rate">20%</div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="n p3">3</span>報酬イメージ：<span id="diamondsLabel">1Mライバー</span>の場合（アクティブレベル別）</h2>
+    <p class="hint" id="revenueAssumption"></p>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>アクティブ<br>レベル</th><th>事務所の<br>売上収益</th><th>マネージャー<br>収益（30%）</th><th>スカウト＋<br>マネジメント収益（50%）</th><th>事務所残<br>（50%ケース）</th></tr></thead>
+        <tbody id="levelBody"></tbody>
+      </table>
+    </div>
+    <div class="formula-note">※事務所残＝事務所の売上収益－スカウト＋マネジメント（50%）収益。ランクアップ・レベニューは上の「計算条件」の設定を各行共通で使用し、アクティブレベルのみ1〜5で変化させています。</div>
+  </section>
+
+  <p class="source-note">
+    ランクアップ・アクティブ・レベニューの各料率表は、lea公式「事務所収益表」（<a href="https://humediajapan1234-ux.github.io/bonus-guide./" target="_blank" rel="noopener">humediajapan1234-ux.github.io/bonus-guide</a>）に実際の数値を入力して出力された結果と一致することを確認済みの係数（0.9536）で再現しています。本シミュレーターは社内検討用の試算です。
+  </p>
+</div>
+
+<script>
+(function(){
+  const K = 0.95364; // ランク・レベニューの実測係数
+  const ACTIVE_RATE_PER_DIAMOND = {1:0.004768, 2:0.0095362, 3:0.0190724, 4:0.0286086, 5:0.0381448}; // アクティブの実測1ダイヤ単価（公式ツール出力から直接測定）
+  const RANK_TABLE = [
+    {id:'R1',  floor:0,       maintain:0,   up:6.5, maintainLabel:'対象外'},
+    {id:'R2',  floor:100000,  maintain:0,   up:6.5, maintainLabel:'対象外'},
+    {id:'R3',  floor:200000,  maintain:2.5, up:4.5},
+    {id:'R4',  floor:300000,  maintain:2.5, up:4.5},
+    {id:'R5',  floor:500000,  maintain:2.5, up:4.5},
+    {id:'R6',  floor:1000000, maintain:2.5, up:4.5},
+    {id:'R7',  floor:1600000, maintain:2.5, up:4.5},
+    {id:'R8',  floor:3000000, maintain:2.0, up:3.0},
+    {id:'R9',  floor:5000000, maintain:2.0, up:3.0},
+    {id:'R10', floor:8000000, maintain:2.0, up:0,   upLabel:'対象外（上限）'},
+  ];
+  const ACTIVE_TABLE = [
+    {lv:1, rate:0.5, days:8,  hours:25},
+    {lv:2, rate:1,   days:15, hours:45},
+    {lv:3, rate:2,   days:18, hours:70},
+    {lv:4, rate:3,   days:20, hours:90},
+    {lv:5, rate:4,   days:22, hours:110},
+  ];
+  const REVENUE_TABLE = [
+    {lv:0, pct:0,   rate:0,  label:'なし（0%）'},
+    {lv:1, pct:70,  rate:2,  label:'Lv1（前月比70%・2%）'},
+    {lv:2, pct:80,  rate:3,  label:'Lv2（前月比80%・3%）'},
+    {lv:3, pct:90,  rate:6,  label:'Lv3（前月比90%・6%）'},
+    {lv:4, pct:100, rate:8,  label:'Lv4（前月比100%・8%）'},
+    {lv:5, pct:110, rate:10, label:'Lv5（前月比110%・10%）'},
+    {lv:6, pct:120, rate:12, label:'Lv6（前月比120%・12%）'},
+    {lv:7, pct:140, rate:15, label:'Lv7（前月比140%・15%）'},
+  ];
+
+  function rankFor(d){
+    let r = RANK_TABLE[0];
+    for (const row of RANK_TABLE){ if (d >= row.floor) r = row; }
+    return r;
+  }
+  function reward(d, ratePct){ return d * (ratePct/100) * K; }
+  function yen(n){ return '¥' + Math.round(n).toLocaleString('ja-JP'); }
+  function diamondLabel(d){
+    if (d >= 1000000) {
+      const m = d/1000000;
+      return (Number.isInteger(m) ? m : m.toFixed(1)) + 'M';
+    }
+    if (d >= 1000) return Math.round(d/1000) + 'K';
+    return String(d);
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const diamondsInput = $('diamonds');
+  const revenueSel = $('revenueLv');
+  const activeLvASel = $('activeLvA');
+  const rankInfo = $('rankInfo');
+  const presetRow = $('presetRow');
+
+  REVENUE_TABLE.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.lv; opt.textContent = r.label;
+    revenueSel.appendChild(opt);
+  });
+  revenueSel.value = 1;
+
+  ACTIVE_TABLE.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.lv; opt.textContent = `Lv${a.lv}（${a.rate}%・${a.days}日/${a.hours}h）`;
+    activeLvASel.appendChild(opt);
+  });
+  activeLvASel.value = 5;
+
+  const PRESETS = [300000, 500000, 700000, 1000000, 1500000, 2000000, 3000000];
+  PRESETS.forEach(p => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'preset-btn'; b.textContent = diamondLabel(p);
+    b.addEventListener('click', () => { diamondsInput.value = p; render(); });
+    b.dataset.val = p;
+    presetRow.appendChild(b);
+  });
+
+  function currentRankOutcome(){
+    const checked = document.querySelector('input[name="rankOutcome"]:checked');
+    return checked ? checked.value : 'maintain';
+  }
+  document.querySelectorAll('input[name="rankOutcome"]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      document.querySelectorAll('.radio-chip').forEach(c => c.classList.remove('checked'));
+      inp.closest('.radio-chip').classList.add('checked');
+      render();
+    });
+  });
+
+  [diamondsInput, revenueSel, activeLvASel].forEach(el => el.addEventListener('input', render));
+
+  function render(){
+    const d = Math.max(0, Number(diamondsInput.value) || 0);
+    const outcome = currentRankOutcome();
+    const rank = rankFor(d);
+    const rankRate = outcome === 'maintain' ? rank.maintain : rank.up;
+    const rankRateLabel = outcome === 'maintain'
+      ? (rank.maintainLabel || rank.maintain + '%')
+      : (rank.upLabel || rank.up + '%');
+
+    presetRow.querySelectorAll('.preset-btn').forEach(b => {
+      b.classList.toggle('active', Number(b.dataset.val) === d);
+    });
+
+    rankInfo.textContent = `現在ランク：${rank.id}（基準${diamondLabel(rank.floor)}〜）／${outcome === 'maintain' ? '維持' : 'アップ'}料率 ${rankRateLabel}`;
+
+    const activeLvA = Number(activeLvASel.value);
+    const activeA = ACTIVE_TABLE[activeLvA - 1];
+    const revLv = Number(revenueSel.value);
+    const rev = REVENUE_TABLE.find(r => r.lv === revLv);
+
+    const rankYen = reward(d, rankRate);
+    const activeYen = d * ACTIVE_RATE_PER_DIAMOND[activeA.lv];
+    const revenueYen = reward(d, rev.rate);
+    const totalYen = rankYen + activeYen + revenueYen;
+
+    const rows = [
+      ['row-rank', '① ランクアップ', `${rank.id}・${outcome === 'maintain' ? '維持' : 'アップ'} ${rankRateLabel}`, rankYen],
+      ['row-active', '② アクティブ', `Lv${activeA.lv} ${activeA.rate}%`, activeYen],
+      ['row-revenue', '③ レベニュー', rev.lv === 0 ? 'なし 0%' : `Lv${rev.lv} ${rev.rate}%`, revenueYen],
+    ];
+    $('breakdownBody').innerHTML = rows.map(([cls, label, rate, y]) => `
+      <tr class="${cls}"><td class="lbl">${label}</td><td>${rate}</td><td class="yen">${yen(y)}</td>
+      <td class="yen">${yen(y*0.3)}</td><td class="yen">${yen(y*0.2)}</td></tr>
+    `).join('') + `
+      <tr class="total"><td class="lbl">事務所報酬 合計（①＋②＋③）</td><td>—</td><td class="yen">${yen(totalYen)}</td>
+      <td class="yen">${yen(totalYen*0.3)}</td><td class="yen">${yen(totalYen*0.2)}</td></tr>
+    `;
+
+    $('diamondsLabel').textContent = diamondLabel(d) + 'ライバー';
+    $('revenueAssumption').textContent = `レベニューが仮に「${rev.label}」だった場合／ランク：${rank.id}・${outcome === 'maintain' ? '維持' : 'アップ'}（${rankRateLabel}）を各行共通で使用。`;
+
+    $('levelBody').innerHTML = ACTIVE_TABLE.map(a => {
+      const aYen = d * ACTIVE_RATE_PER_DIAMOND[a.lv];
+      const sales = rankYen + aYen + revenueYen;
+      const mgmt30 = sales * 0.3;
+      const scoutMgmt50 = sales * 0.5;
+      const remain = sales - scoutMgmt50;
+      const isCurrent = a.lv === activeLvA;
+      return `<tr class="${isCurrent ? 'current' : ''}">
+        <td class="lbl">Lv${a.lv}（${a.rate}%・${a.days}日/${a.hours}h）</td>
+        <td class="yen">${yen(sales)}</td>
+        <td class="yen">${yen(mgmt30)}</td>
+        <td class="yen">${yen(scoutMgmt50)}</td>
+        <td class="yen">${yen(remain)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  render();
+})();
+</script>
